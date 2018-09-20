@@ -1,0 +1,25 @@
+github link (https://github.com/panchenying/test1.git)
+
+#HYPOTHESIS
+I will be answering the question: What childhood (8-9 years) risk factors predict juvenile (10-16 years) offending?
+Based on this a priori hypothesis from readings I've done, I will be looking at variables related to antisocial child behaviour, low intelligence and school acheivement, family criminality, family poverty, and poor parenting and neglect.
+
+loading multiple packages
+```{r}
+library(pacman)
+p_load(dplyr, ggplot2, magrittr, psych, tidyverse, haven, broom, purrr)
+```
+loading data
+```{r}
+conviction <- read_spss("conviction_data.sav")
+delinquency <- read_spss("Cambridge_delinquency.sav")
+```
+creating a smaller dataset by selecting only the variables I want to look at
+```{r}
+juvenile_delinquency <- delinquency %>%  select(v34, v39, v42, v53, v108, v103, v147,
+                               v158, v161, v137, v300, v301, v169, v170, v171, v172, v175, v177,
+                               v83, v84, v92, v138, v89, v90, v59, v60, v62, v63, v123)
+```
+
+
+
