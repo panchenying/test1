@@ -14,12 +14,34 @@ loading data
 conviction <- read_spss("conviction_data.sav")
 delinquency <- read_spss("Cambridge_delinquency.sav")
 ```
+
+#QUESTION 1
 creating a smaller dataset by selecting only the variables I want to look at
 ```{r}
-juvenile_delinquency <- delinquency %>%  select(v34, v39, v42, v53, v108, v103, v147,
-                               v158, v161, v137, v300, v301, v169, v170, v171, v172, v175, v177,
-                               v83, v84, v92, v138, v89, v90, v59, v60, v62, v63, v123)
+juvenile_delinquency <- delinquency %>%  
+  select(v34, v39, v42, v53, v108, v103, v147,
+  v158, v161, v137, v300, v301, v169, v170, v171, v172, v175, v177,
+  v83, v84, v92, v138, v89, v90, v59, v60, v62, v63, v123)
 ```
+merging the conviction and juvenile_delinquency datasets
+```{r}
+conviction_spread <- spread(conviction, agecat, convicted) #spreading conviction data into wide format
+juvenile_delinquency$icpsr_seq_id_number<-c(1:411) #creating a common column key to before merging
+juvenile_deliquency_joined <- left_join(x = juvenile_delinquency, y = conviction_spread, by = "icpsr_seq_id_number") #merging by icpsr_seq_id_number
+```
+creating a new smaller dataset of the variables I want to use
+```{r}
+juvenile_delinquency <- juvenile_deliquency_joined %>%  
+  select(v34, v39, v42, v53, v108, v103, v147,
+  v158, v161, v137, v300, v301, v169, v170, v171, v172, v175, v177,
+  v83, v84, v92, v138, v89, v90, v59, v60, v62, v63, v123, convicted_as_juvenile)
+```
+renaming variables
+```{r}
+
+```
+
+
 
 
 
