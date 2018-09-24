@@ -7,8 +7,8 @@ Based on this a priori hypothesis from readings I've done, I will be looking at 
 ```{r}
 library(pacman)
 p_load(dplyr, ggplot2, magrittr, psych, tidyverse, haven, broom, purrr, vcd, DHARMa, caret,
-       sjlabelled, kableExtra, car, leaps, glmnet, Metrics, magick, bootES, randomForest, tree, 
-       gbm, class, e1071, stringr, knitr, kableExtra, klaR)
+       kableExtra, car, leaps, glmnet, Metrics, magick, bootES, randomForest, tree, 
+       gbm, class, e1071, stringr, knitr)
 ```
 ##loading data using haven to read SPSS files
 ```{r}
@@ -38,6 +38,7 @@ delinquency <- deliquency_joined %>%
 delinquency <- delinquency %>% rename(id = icpsr_seq_id_number, conduct_disorder = v53,
                                       sibling_disturbance = v137, physical_neglect = v123, 
                                       iq = v119)
+p_load(sjlabelled) #label package
 delinquency <- remove_all_labels(delinquency) #removing all labels as they are no longer necessary (redundent)
 ```
 
@@ -46,52 +47,54 @@ delinquency <- remove_all_labels(delinquency) #removing all labels as they are n
 ```{r}
 #simple summary statistics
 delinquency %>% 
-  describeBy(group = delinquency$convicted_as_adult, mat = T)
+  describeBy(group = delinquency$convicted_as_adult, mat = T) %>% 
+  kable() %>%
+  kable_styling() #tidying data into table
 ```
+
+Things to note in the summary statistics is that most participants don't have conduct disorder and most don't have a deliquent sibling.
+
 ```{r}
 #correlations
 pairs.panels(delinquency)
 ```
+
 looking at correlations, we see that being convicted as a juvenile and being convicted as an adult has a moderate positive relationship. In other words, it is more likely to be convicted as an adult if the participant has been convicted as a juvenile.
 none of the other variables are too highly correlated, meaning that there are no redundent variables.
 
 ```{r}
 #bar graph (adult convictions)
 ggplot(delinquency, aes(x = convicted_as_adult)) + 
-  geom_bar(fill = "darkgrey") + 
-  xlab("convicted_as_adult") + ylab("Number of participants")
+  geom_bar(fill = "darkgrey", na.rm = TRUE) + #removing the NAs in the dataset
+  xlab("convicted_as_adult") + ylab("Number of participants") +
+  ggtitle("Number of participants with adult convictions") #adding a title to the bar graph
+
 #bar graph (juvenile convictions)
 ggplot(delinquency, aes(x = convicted_as_juvenile)) + 
-  geom_bar(fill = "lightgrey") + 
-  xlab("convicted_as_juvenile") + ylab("Number of participants")
+  geom_bar(fill = "lightgrey", na.rm = TRUE) + #removing the NAs in the dataset
+  xlab("convicted_as_juvenile") + ylab("Number of participants") +
+  ggtitle("Number of participants with juvenile convictions") #adding a title to the bar graph
 ```
+
 from the bar graph, we can tell that there are more participants not convicted as adults than those convicted as adults. similarly, there are more participants who were not convicted as juveniles than those convicted a juveniles. there are actually less people convicted as juveniles compared to adults.
 
 ```{r}
 #mosaic plot (adult conviction, physical neglect, and conduct disorder)
 mosaic(~ convicted_as_adult + physical_neglect + conduct_disorder, data = delinquency)
 ```
-ooking at the mosaic plot to understand the relations between our variables and adult convictions. We can see that there is a strong relation between conduct disorder and physical neglect. In other words, those who are neglected tend to have conduct disorder. In terms of those who are convicted as adults, they tend to have conduct disorder but tend to not be neglected, which is interested considering the readings.
+
+Looking at the mosaic plot to understand the relations between our variables and adult convictions. We can see that there is a strong relation between conduct disorder and physical neglect. In other words, those who are neglected tend to have conduct disorder. In terms of those who are convicted as adults, they tend to have conduct disorder but tend to not be neglected, which is interested considering the readings.
 
 ```{r}
 #mosaic plot (adult conviction, juvenile conviction, and sibling disturbance)
 mosaic(~ convicted_as_adult + convicted_as_juvenile + sibling_disturbance, data = delinquency)
 ```
+
 from this mosaic plot, we can see that those convicted as juveniles will most likely be convicted as adults, in addition, those convicted as adults and juveniles will most likely have a sibling who is also delinquent. 
-
-```{r}
-summdata <- delinquency %>% 
-  group_by(convicted_as_adult, physical_neglect, conduct_disorder) %>% 
-  na.omit() %>% 
-  summarise_all(funs(mean, sd, n())) 
-
-summdata%>% 
-  kable() %>% kable_styling(full_width = F)
-```
 
 #QUESTION 3
 ##Training and test data
-```{r}
+```{r echo=FALSE, warning=FALSE}
 #creating training and testing sets
 set.seed(135)
 traindata <- sample_frac(delinquency, 0.75) #75% of the delinquency data will be allocated to training data
@@ -115,34 +118,35 @@ testdata %<>%
 #logistic regression model 1
 trainmodel1 <- glm(convicted_as_adult ~ conduct_disorder + sibling_disturbance +
     physical_neglect + iq + convicted_as_juvenile, family = "binomial", data = traindata)
-summary(trainmodel1) #summary of training model1
+tidy(trainmodel1)  %>% #summary of training model1
+  kable() %>%
+  kable_styling() #tidying data into table
+```
+```{r warning=FALSE}
 #predicting accuracy of the training model
 trainmodelpred <- predict(trainmodel1, type = "response")
 confusionMatrix(as.factor(as.numeric(trainmodelpred >= 0.05)), #predictions cut off set at 0.05
-                as.factor(traindata$convicted_as_adult))
+                as.factor(traindata$convicted_as_adult)) %>% 
+                tidy() %>% kable() %>%
+                kable_styling() #tidy the data output
 ```
+
+
 The trainging logistic regression model yielded a 71,37% accuracy in predictions with the training model
 
-```{r}
+
+```{r warning=FALSE}
 #looking at predicting accuracy of testing model
 testmodelpred <- predict(trainmodel1, newdata = testdata, type = "response")
 confusionMatrix(as.factor(as.numeric(testmodelpred >= 0.05)),
-                as.factor(testdata$convicted_as_adult))
+                as.factor(testdata$convicted_as_adult)) %>% 
+                tidy() %>% kable() %>%
+                kable_styling() #tidy the data output #tidy the data output
 ```
+
+
 there is a 67,53% prediction accuracy with the testing model, although there is only a slight drop. The prediction accuracy is moderate (not very good)
 
-##Remove NA and set juvenile convictions as factor
-```{r}
-#Defining adult convictionsand juvenile convictions as factors in the training data
-traindata %<>% 
-  mutate(convicted_as_juvenile = factor(convicted_as_juvenile)) %>% 
-  na.omit() #omit NAs from the data
-
-#Same thing for the test set
-testdata %<>% 
-  mutate(convicted_as_juvenile = factor(convicted_as_juvenile)) %>% 
-  na.omit() #omit NAs from the data
-```
 
 ##Building a tree model
 ```{r}
@@ -156,8 +160,11 @@ text(traintree1, pretty = 1) #adding text to our tree plot
 ```{r}
 #predictive accuracy of tree on test data
 traintreepred1 <- predict(traintree1, newdata = testdata, type = "class")
-confusionMatrix(traintreepred1, testdata$convicted_as_adult)
+confusionMatrix(traintreepred1, testdata$convicted_as_adult) %>% 
+  tidy() %>% kable() %>%
+  kable_styling() #tidy the data output #tidy the data output
 ```
+
 the predicitve accuracy is pretty good on our test data. It is 74%, which is higher than our logictic regression mode. We shall prune the tree to see if we can get a better accuracy.
 
 ##Pruning tree
@@ -166,6 +173,7 @@ the predicitve accuracy is pretty good on our test data. It is 74%, which is hig
 prunetree1 <- cv.tree(traintree1)
 plot(prunetree1$size, prunetree1$dev, type = "b")
 ```
+
 it seems that 2 variables is the best... but we'll go with 3 first
 
 ```{r}
@@ -178,8 +186,11 @@ text(prune_traintree, pretty = 1)
 #testing predictive accuracy of pruned tree
 traintreepred2 <- predict(prune_traintree,
 newdata = testdata, type = "class")
-confusionMatrix(traintreepred2, testdata$convicted_as_adult)
+confusionMatrix(traintreepred2, testdata$convicted_as_adult) %>% 
+  tidy() %>% kable() %>%
+  kable_styling() #tidy the data output#tidy the data output
 ```
+
 the accuracy has increased! to 84,42% which is a much better predictive accuracy.
 
 ##Bagging tree
@@ -190,8 +201,11 @@ select(-id) %$% #removing ID from dataset
 randomForest(convicted_as_adult ~ ., data = ., mtry = 3)
 #predicting with test data
 traintreebag_pred <- predict(traintreebag, newdata = testdata, type = "class")
-confusionMatrix(traintreebag_pred, testdata$convicted_as_adult)
+confusionMatrix(traintreebag_pred, testdata$convicted_as_adult) %>% 
+  tidy() %>% kable() %>%
+  kable_styling() #tidy the data output #tidy the data output
 ```
+
 accuracy is similar to that of our first tree model, slightly higher though, and still higher than our logistic regression model.
 
 ##Random forest of trees
@@ -202,9 +216,12 @@ select(-id) %$% #removing ID from our dataset
 randomForest(convicted_as_adult ~ ., data = ., mtry = 3)
 #predicitng with test data
 traindataf_pred <- predict(traindataf, newdata = testdata, type = "class")
-confusionMatrix(traindataf_pred, testdata$convicted_as_adult)
-#accuracy is also similar to that of our tree bag, although slightly better
+confusionMatrix(traindataf_pred, testdata$convicted_as_adult) %>% 
+  tidy() %>% kable() %>%
+  kable_styling() #tidy the data output #tidy the data output
 ```
+
+accuracy is also similar to that of our tree bag, although slightly better
 
 #CONCLUSION
 In the end, our tree with 3 variables (convicted as juvenile and IQ) had the highest predicitve accuracy compared to our other trees and the logistic regression model.
