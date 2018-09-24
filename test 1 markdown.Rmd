@@ -1,47 +1,113 @@
 github link (https://github.com/panchenying/test1.git)
 
 #HYPOTHESIS
-I will be answering the question: What childhood (8-9 years) risk factors predict juvenile (10-16 years) offending?
-Based on this a priori hypothesis from readings I've done, I will be looking at variables related to antisocial child behaviour, low intelligence and school acheivement, family criminality, family poverty, and poor parenting and neglect.
+I will be answering the question: What childhood (8-9 years) risk factors predict adult (17-24 years) offending?
+Based on this a priori hypothesis from readings I've done, I will be looking at variables related to antisocial child behaviour, low intelligence and school acheivement, poverty, juvenile offending, and poor parenting and neglect.
 
-loading multiple packages
+loading multiple packages with pacman package
 ```{r}
 library(pacman)
-p_load(dplyr, ggplot2, magrittr, psych, tidyverse, haven, broom, purrr)
+p_load(dplyr, ggplot2, magrittr, psych, tidyverse, haven, broom, purrr, vcd, DHARMa, caret,
+       sjlabelled)
 ```
-loading data
+loading data using haven to read SPSS files
 ```{r}
 conviction <- read_spss("conviction_data.sav")
 delinquency <- read_spss("Cambridge_delinquency.sav")
 ```
 
 #QUESTION 1
-creating a smaller dataset by selecting only the variables I want to look at
+The original dataset is too large and it lags when I want to look at the data. Therefore, by looking at the codebook, I will be creating a smaller dataset by selecting only the variables I want to look
 ```{r}
-juvenile_delinquency <- delinquency %>%  
-  select(v34, v39, v42, v53, v108, v103, v147,
-  v158, v161, v137, v300, v301, v169, v170, v171, v172, v175, v177,
-  v83, v84, v92, v138, v89, v90, v59, v60, v62, v63, v123)
+delinquency <- delinquency %>%  
+  select(v34, v53, v119, v137, v169, v170, v171,
+        v84, v92, v138, v59, v60, v123)
 ```
 merging the conviction and juvenile_delinquency datasets
 ```{r}
 conviction_spread <- spread(conviction, agecat, convicted) #spreading conviction data into wide format
-juvenile_delinquency$icpsr_seq_id_number<-c(1:411) #creating a common column key to before merging
-juvenile_deliquency_joined <- left_join(x = juvenile_delinquency, y = conviction_spread, by = "icpsr_seq_id_number") #merging by icpsr_seq_id_number
+delinquency$icpsr_seq_id_number<-c(1:411) #creating a common column key before merging
+deliquency_joined <- left_join(x = delinquency, y = conviction_spread, by = "icpsr_seq_id_number") #merging by icpsr_seq_id_number
 ```
-creating a new smaller dataset of the variables I want to use
+After merging there are variables in my dataset I do not want to include in my analysis. Also, after looking at my variables again, I realize there are some overlapping variables. 
+So I will create a new smaller dataset of the variables I want to use.
+V34 (no. of juvenile convictions) as I have the convicted_as_juvenile variable.
+v138 (SES) is removed as I already have a income variable.
+v171 (teachers rating of cleanliness) is removed as it doesn't relate to anti social behaviour.
 ```{r}
-juvenile_delinquency <- juvenile_deliquency_joined %>%  
-  select(v34, v39, v42, v53, v108, v103, v147,
-  v158, v161, v137, v300, v301, v169, v170, v171, v172, v175, v177,
-  v83, v84, v92, v138, v89, v90, v59, v60, v62, v63, v123, convicted_as_juvenile)
+delinquency <- deliquency_joined %>%  
+  select(v53, v119, v137, v169, v170, 
+        v84, v92,v59, v60, v123,
+         convicted_as_juvenile, convicted_as_adult)
 ```
 renaming variables
 ```{r}
-
+delinquency <- delinquency %>% rename(
+                                conduct_disorder = v53, 
+                                IQ = v119, sibling_disturbance = v137, 
+                                concentration = v169, difficult_relationships = v170, 
+                                housing = v84, family_income = v92,
+                                father_discipline = v59, mother_discipline = v60,
+                                physical_neglect = v123)
+delinquency <- remove_all_labels(juvenile_delinquency) #removing all labels as they are no longer necessary (redundent)
 ```
 
+#QUESTION 2
 
+Exploring the data
+```{r}
+describeBy(delinquency)
+```
 
+```{r}
+#mosaic plot to look at the relationship between neglect and acting out on juvenile convictions
+mosaic (~ convicted_as_adult + physical_neglect + conduct_disorder, 
+        data = delinquency)
+#from the first mosaic plot, it shows that those who are physcially neglected AND go on to later be convicted as adults, tend to behave very badly (i.e. they have conduct disorder). Interstingly, most of those convicted as adults did not experience neglect.
+mosaic (~ convicted_as_adult + sibling_disturbance + conduct_disorder, 
+        data = delinquency)
+#from the middle mosaic plot, it shows that those who are convicted as adults have sibling disturbance and don't tend to have conduct disorder as the larger portion is well behaved.
+mosaic (~ convicted_as_adult + difficult_relationships + conduct_disorder, 
+        data = delinquency)
+#from the last mosaic plot, it shows that those convicted as adults tend to not have difficulty forming relationships at school, however those that do, tend to have conduct disorder
+```
 
+```{r}
+#All variables are categorical, thus, running a pairs panels or descriptives will yield meaningless information. Therefore, a bar graph and mosaic plots of the data is best. From the bar graph below, we can see that most of the participants in the study weren't convicted as adults. As can be seen in the mosaic plot above as well.
+ggplot(delinquency, aes(x = convicted_as_adult)) + 
+  geom_bar(fill = "darkgrey") + 
+  xlab("convicted_as_adult") + ylab("Number of participants")
+```
+```{r}
+#for the other variables, a mosaic would represent the data best.
+mosaic (~ convicted_as_adult + IQ + convicted_as_juvenile, 
+        data = delinquency)
+#from the mosaic plot, we can see that those convicted as adults tend to be in the lower IQ range, and they tend to have juvenile conviction/s.
+mosaic (~ convicted_as_adult + housing + family_income, 
+        data = delinquency)
+#from the mosaic plot, we can see that those convicted as adults had tolerable levels of housing, but also had inadequate family income. Whereas those not convicted as juveniles had more spread out family income (between adaquate and inadaquate) and better housing.
+```
+
+#QUESTION 3
+```{r}
+#creating training and testing sets
+set.seed(135)
+traindata <- sample_frac(delinquency, 0.75) #75% of the juvenile delinquency data will be allocated to training data
+testdata <- setdiff(delinquency, traindata) #the difference, 25%, will be allocated to testing data
+
+#logistic regression model1 without interactions and with all the variables in
+#convicted as a juvenile, IQ, difficult relationships, and mother discipline are the only variables significant in this model.
+model1 <- glm(convicted_as_adult ~ convicted_as_juvenile + conduct_disorder + IQ + 
+                sibling_disturbance + concentration + difficult_relationships + housing + 
+                family_income + father_discipline + mother_discipline + physical_neglect, 
+                data = traindata)
+summary(model1) #summary of model1
+```
+```{r}
+#logistic regression model2 with interactions
+model2 <- glm(convicted_as_adult ~ IQ + mother_discipline + convicted_as_juvenile +
+                difficult_relationships + conduct_disorder,
+                data = traindata)
+summary(model2) #summary of model2
+```
 
