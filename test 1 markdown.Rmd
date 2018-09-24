@@ -1,14 +1,15 @@
 github link (https://github.com/panchenying/test1.git)
 
 #HYPOTHESIS
-I will be answering the question: What childhood (8-9 years) risk factors predict adult (17-24 years) offending?
-Based on this a priori hypothesis from readings I've done, I will be looking at variables related to antisocial child behaviour, low intelligence and school acheivement, poverty, juvenile offending, and poor parenting and neglect.
+I will be answering the question: What childhood (8-9 years) risk factors predict offending?
+Based on this a priori hypothesis from readings I've done, I will be looking at variables related to problem child behaviour, low intelligence, juvenile offending, sibling delinquency, and neglect.
 
-loading multiple packages with pacman package
+loading multiple packages with the pacman package
 ```{r}
 library(pacman)
 p_load(dplyr, ggplot2, magrittr, psych, tidyverse, haven, broom, purrr, vcd, DHARMa, caret,
-       sjlabelled)
+       sjlabelled, kableExtra, car, leaps, glmnet, Metrics, magick, bootES, randomForest, tree, 
+       gbm, class, e1071, stringr, knitr, kableExtra)
 ```
 loading data using haven to read SPSS files
 ```{r}
@@ -17,11 +18,10 @@ delinquency <- read_spss("Cambridge_delinquency.sav")
 ```
 
 #QUESTION 1
-The original dataset is too large and it lags when I want to look at the data. Therefore, by looking at the codebook, I will be creating a smaller dataset by selecting only the variables I want to look
+The original dataset is too large and it lags when I want to look at the data. Therefore, by looking at the codebook, I will be creating a smaller dataset by selecting only the variables I want to look at
 ```{r}
 delinquency <- delinquency %>%  
-  select(v34, v53, v119, v137, v169, v170, v171,
-        v84, v92, v138, v59, v60, v123)
+  select(v53, v137, v123, v119)
 ```
 merging the conviction and juvenile_delinquency datasets
 ```{r}
@@ -29,64 +29,62 @@ conviction_spread <- spread(conviction, agecat, convicted) #spreading conviction
 delinquency$icpsr_seq_id_number<-c(1:411) #creating a common column key before merging
 deliquency_joined <- left_join(x = delinquency, y = conviction_spread, by = "icpsr_seq_id_number") #merging by icpsr_seq_id_number
 ```
-After merging there are variables in my dataset I do not want to include in my analysis. Also, after looking at my variables again, I realize there are some overlapping variables. 
+After merging there are variables in my dataset I do not want to include in my analysis.
 So I will create a new smaller dataset of the variables I want to use.
-V34 (no. of juvenile convictions) as I have the convicted_as_juvenile variable.
-v138 (SES) is removed as I already have a income variable.
-v171 (teachers rating of cleanliness) is removed as it doesn't relate to anti social behaviour.
 ```{r}
 delinquency <- deliquency_joined %>%  
-  select(v53, v119, v137, v169, v170, 
-        v84, v92,v59, v60, v123,
-         convicted_as_juvenile, convicted_as_adult)
+  select(icpsr_seq_id_number, v53, v137, v123, v119, convicted_as_juvenile, convicted_as_adult)
 ```
 renaming variables
 ```{r}
-delinquency <- delinquency %>% rename(
-                                conduct_disorder = v53, 
-                                IQ = v119, sibling_disturbance = v137, 
-                                concentration = v169, difficult_relationships = v170, 
-                                housing = v84, family_income = v92,
-                                father_discipline = v59, mother_discipline = v60,
-                                physical_neglect = v123)
-delinquency <- remove_all_labels(juvenile_delinquency) #removing all labels as they are no longer necessary (redundent)
+delinquency <- delinquency %>% rename(id = icpsr_seq_id_number, conduct_disorder = v53,
+                                      sibling_disturbance = v137, physical_neglect = v123, 
+                                      iq = v119)
+delinquency <- remove_all_labels(delinquency) #removing all labels as they are no longer necessary (redundent)
 ```
 
 #QUESTION 2
-
 Exploring the data
 ```{r}
-describeBy(delinquency)
+#simple summary statistics
+delinquency %>% 
+  describeBy(group = delinquency$convicted_as_adult, mat = T)
 ```
-
 ```{r}
-#mosaic plot to look at the relationship between neglect and acting out on juvenile convictions
-mosaic (~ convicted_as_adult + physical_neglect + conduct_disorder, 
-        data = delinquency)
-#from the first mosaic plot, it shows that those who are physcially neglected AND go on to later be convicted as adults, tend to behave very badly (i.e. they have conduct disorder). Interstingly, most of those convicted as adults did not experience neglect.
-mosaic (~ convicted_as_adult + sibling_disturbance + conduct_disorder, 
-        data = delinquency)
-#from the middle mosaic plot, it shows that those who are convicted as adults have sibling disturbance and don't tend to have conduct disorder as the larger portion is well behaved.
-mosaic (~ convicted_as_adult + difficult_relationships + conduct_disorder, 
-        data = delinquency)
-#from the last mosaic plot, it shows that those convicted as adults tend to not have difficulty forming relationships at school, however those that do, tend to have conduct disorder
+#looking at correlations, we see that being convicted as a juvenile and being convicted as an adult has a moderate positive relationship. In other words, it is more likely to be convicted as an adult if the participant has been convicted as a juvenile.
+#none of the other variables are too highly correlated, meaning that there are no redundent variables.
+pairs.panels(delinquency)
 ```
-
 ```{r}
-#All variables are categorical, thus, running a pairs panels or descriptives will yield meaningless information. Therefore, a bar graph and mosaic plots of the data is best. From the bar graph below, we can see that most of the participants in the study weren't convicted as adults. As can be seen in the mosaic plot above as well.
+#from the bar graph, we can tell that there are more participants not convicted as adults than those convicted as adults.
 ggplot(delinquency, aes(x = convicted_as_adult)) + 
   geom_bar(fill = "darkgrey") + 
   xlab("convicted_as_adult") + ylab("Number of participants")
+#similarly, there are more participants who were not convicted as juveniles than those convicted a juveniles. there are actually less people convicted as juveniles compared to adults.
+ggplot(delinquency, aes(x = convicted_as_juvenile)) + 
+  geom_bar(fill = "lightgrey") + 
+  xlab("convicted_as_juvenile") + ylab("Number of participants")
 ```
 ```{r}
-#for the other variables, a mosaic would represent the data best.
-mosaic (~ convicted_as_adult + IQ + convicted_as_juvenile, 
-        data = delinquency)
-#from the mosaic plot, we can see that those convicted as adults tend to be in the lower IQ range, and they tend to have juvenile conviction/s.
-mosaic (~ convicted_as_adult + housing + family_income, 
-        data = delinquency)
-#from the mosaic plot, we can see that those convicted as adults had tolerable levels of housing, but also had inadequate family income. Whereas those not convicted as juveniles had more spread out family income (between adaquate and inadaquate) and better housing.
+#looking at the mosaic plot to understand the relations between our variables and adult convictions. We can see that there is a strong relation between conduct disorder and physical neglect. In other words, those who are neglected tend to have conduct disorder. In terms of those who are convicted as adults, they tend to have conduct disorder but tend to not be neglected, which is interested considering the readings.
+mosaic(~ convicted_as_adult + physical_neglect + conduct_disorder, data = delinquency)
 ```
+```{r}
+#from this mosaic plot, we can see that those convicted as juveniles will most likely be convicted as adults, in addition, those convicted as adults and juveniles will most likely have a sibling who is also delinquent. 
+mosaic(~ convicted_as_adult + convicted_as_juvenile + sibling_disturbance, data = delinquency)
+```
+
+```{r}
+summdata <- delinquency %>% 
+  group_by(convicted_as_adult, physical_neglect, conduct_disorder) %>% 
+  na.omit() %>% 
+  summarise_all(funs(mean, sd, n())) 
+
+summdata%>% 
+  kable() %>% kable_styling(full_width = F)
+```
+
+
 
 #QUESTION 3
 ```{r}
@@ -94,20 +92,95 @@ mosaic (~ convicted_as_adult + housing + family_income,
 set.seed(135)
 traindata <- sample_frac(delinquency, 0.75) #75% of the juvenile delinquency data will be allocated to training data
 testdata <- setdiff(delinquency, traindata) #the difference, 25%, will be allocated to testing data
+```
 
-#logistic regression model1 without interactions and with all the variables in
-#convicted as a juvenile, IQ, difficult relationships, and mother discipline are the only variables significant in this model.
-model1 <- glm(convicted_as_adult ~ convicted_as_juvenile + conduct_disorder + IQ + 
-                sibling_disturbance + concentration + difficult_relationships + housing + 
-                family_income + father_discipline + mother_discipline + physical_neglect, 
-                data = traindata)
-summary(model1) #summary of model1
+```{r}
+#Defining adult convictions as factors in the training data
+traindata %<>% 
+  mutate(convicted_as_adult = factor(convicted_as_adult)) %>% 
+  na.omit() #omit NAs from the data
+
+#Same thing for the test set
+testdata %<>% 
+  mutate(convicted_as_adult = factor(convicted_as_adult)) %>% 
+  na.omit() #omit NAs from the data
+```
+
+buidling the model
+```{r}
+#logistic regression model 1
+trainmodel1 <- glm(convicted_as_adult ~ conduct_disorder + sibling_disturbance +
+    physical_neglect + iq + convicted_as_juvenile, family = "binomial", data = traindata)
+summary(trainmodel1)
+#predicting accuracy of the training model
+trainmodelpred <- predict(trainmodel1, type = "response")
+confusionMatrix(as.factor(as.numeric(trainmodelpred >= 0.05)),
+                as.factor(traindata$convicted_as_adult))
+#there is a 71,37% accuracy in predictions with the training model
 ```
 ```{r}
-#logistic regression model2 with interactions
-model2 <- glm(convicted_as_adult ~ IQ + mother_discipline + convicted_as_juvenile +
-                difficult_relationships + conduct_disorder,
-                data = traindata)
-summary(model2) #summary of model2
+testmodelpred <- predict(trainmodel1, newdata = testdata, type = "response")
+confusionMatrix(as.factor(as.numeric(testmodelpred >= 0.05)),
+                as.factor(testdata$convicted_as_adult))
+#there is a 67,53% prediction accuracy with the testing model, although there is only a slight drop, the prediction accuracy is moderate
 ```
+
+
+```{r}
+#making a tree!
+traindata2 <- traindata %>%
+select(-id) #exlcuding ID from the training dataset
+traintree1 <- tree(convicted_as_adult ~ ., data = traindata2)
+plot(traintree1)
+text(traintree1, pretty = 1)
+```
+```{r}
+traintreepred1 <- predict(traintree1, newdata = testdata, type = "class")
+confusionMatrix(traintreepred1, testdata$convicted_as_adult)
+#the accuracy is pretty good. We shall prune the tree to see if we can get a better accuracy.
+```
+```{r}
+#pruning the tree
+prunetree1 <- cv.tree(traintree1)
+plot(prunetree1$size, prunetree1$dev, type = "b")
+#it seems that 2 variables is the best...
+```
+```{r}
+#running the tree with only 2 variables
+prune_traintree = prune.tree(traintree1, best = 2)
+plot(prune_traintree)
+text(prune_traintree, pretty = 1)
+```
+```{r}
+traintreepred2 <- predict(prune_traintree,
+newdata = testdata, type = "class")
+confusionMatrix(traintreepred2, testdata$convicted_as_adult)
+#the accuracy has increased, but we only have 2 variables so that makes sense...
+```
+```{r}
+#Bagging - try to improve tree classification
+traintreebag <- traindata %>%
+select(-id) %$%
+randomForest(convicted_as_adult ~ ., data = ., mtry = 4)
+traintreebag_pred <- predict(traintreebag, newdata = testdata, type = "class")
+confusionMatrix(traintreebag_pred, testdata$convicted_as_adult)
+#accuracy is similar to that of our first model
+```
+```{r}
+# Random forest - try this to improve model
+traindataf <- traindata %>%
+select(-id) %$%
+randomForest(convicted_as_adult ~ ., data = ., mtry = 2)
+traindataf_pred <- predict(traindataf, newdata = testdata, type = "class")
+confusionMatrix(traindataf_pred, testdata$convicted_as_adult)
+#accuracy is also similar to that of our first model, although slightly better
+```
+```{r}
+# Boosting
+trainboost <- traindata %>%
+select(-id) %$%
+gbm((unclass(convicted_as_adult)-1) ~ ., n.trees = 500, data = .)
+```
+
+
 
