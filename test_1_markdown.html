@@ -964,6 +964,10 @@ mosaic(~ convicted_as_adult + convicted_as_juvenile + sibling_disturbance, data 
 <h1>QUESTION 3</h1>
 <div id="training-and-test-data" class="section level2">
 <h2>Training and test data</h2>
+<pre class="r"><code>#creating training and testing sets
+set.seed(135)
+traindata &lt;- sample_frac(delinquency, 0.75) #75% of the delinquency data will be allocated to training data
+testdata &lt;- setdiff(delinquency, traindata) #the difference, 25%, will be allocated to testing data</code></pre>
 </div>
 <div id="remove-na-and-set-convictions-as-factors" class="section level2">
 <h2>Remove NA and set convictions as factors</h2>
@@ -976,10 +980,13 @@ traindata %&lt;&gt;%
 testdata %&lt;&gt;% 
   mutate(convicted_as_adult = factor(convicted_as_adult)) %&gt;% 
   na.omit() #omit NAs from the data</code></pre>
+<pre class="r"><code>#mse function to test model predictive accuracy
+mse_fun &lt;- function(a_model) #input a model
+    mean(a_model$residuals^2) #the mean of the square root of the residuals </code></pre>
 </div>
-<div id="buidling-the-logistic-regression-model" class="section level2">
-<h2>Buidling the logistic regression model</h2>
-<pre class="r"><code>#logistic regression model 1
+<div id="buidling-the-logistic-regression-model-and-building-mse-function" class="section level2">
+<h2>Buidling the logistic regression model and building MSE function</h2>
+<pre class="r"><code>#logistic regression training model 1
 trainmodel1 &lt;- glm(convicted_as_adult ~ conduct_disorder + sibling_disturbance +
     physical_neglect + iq + convicted_as_juvenile, family = &quot;binomial&quot;, data = traindata)
 tidy(trainmodel1)  %&gt;% #summary of training model1
@@ -1110,6 +1117,142 @@ convicted_as_juvenile
 </tr>
 </tbody>
 </table>
+<pre class="r"><code>mse_fun(trainmodel1)</code></pre>
+<pre><code>## [1] 8.316691</code></pre>
+<pre class="r"><code>#logitsic regression test model 1
+testmodel1 &lt;- glm(convicted_as_adult ~ conduct_disorder + sibling_disturbance +
+    physical_neglect + iq + convicted_as_juvenile, family = &quot;binomial&quot;, data = testdata)
+tidy(testmodel1)  %&gt;% #summary of training model1
+  kable() %&gt;%
+  kable_styling() #tidying data into table</code></pre>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+term
+</th>
+<th style="text-align:right;">
+estimate
+</th>
+<th style="text-align:right;">
+std.error
+</th>
+<th style="text-align:right;">
+statistic
+</th>
+<th style="text-align:right;">
+p.value
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+(Intercept)
+</td>
+<td style="text-align:right;">
+-5.2040075
+</td>
+<td style="text-align:right;">
+1.6671516
+</td>
+<td style="text-align:right;">
+-3.1214964
+</td>
+<td style="text-align:right;">
+0.0017993
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+conduct_disorder
+</td>
+<td style="text-align:right;">
+0.1057354
+</td>
+<td style="text-align:right;">
+0.3868572
+</td>
+<td style="text-align:right;">
+0.2733190
+</td>
+<td style="text-align:right;">
+0.7846080
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+sibling_disturbance
+</td>
+<td style="text-align:right;">
+-0.6454261
+</td>
+<td style="text-align:right;">
+0.7257296
+</td>
+<td style="text-align:right;">
+-0.8893478
+</td>
+<td style="text-align:right;">
+0.3738162
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+physical_neglect
+</td>
+<td style="text-align:right;">
+0.2871824
+</td>
+<td style="text-align:right;">
+1.1075767
+</td>
+<td style="text-align:right;">
+0.2592890
+</td>
+<td style="text-align:right;">
+0.7954123
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+iq
+</td>
+<td style="text-align:right;">
+0.1437176
+</td>
+<td style="text-align:right;">
+0.3408398
+</td>
+<td style="text-align:right;">
+0.4216573
+</td>
+<td style="text-align:right;">
+0.6732752
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+convicted_as_juvenile
+</td>
+<td style="text-align:right;">
+3.6363929
+</td>
+<td style="text-align:right;">
+0.9491716
+</td>
+<td style="text-align:right;">
+3.8311228
+</td>
+<td style="text-align:right;">
+0.0001276
+</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>mse_fun(testmodel1) #mse function</code></pre>
+<pre><code>## [1] 8.285567</code></pre>
+<p>Our test model has the lower MSE, thus, it is a better model with smaller error.</p>
 <pre class="r"><code>#predicting accuracy of the training model
 trainmodelpred &lt;- predict(trainmodel1, type = &quot;response&quot;)
 confusionMatrix(as.factor(as.numeric(trainmodelpred &gt;= 0.05)), #predictions cut off set at 0.05
